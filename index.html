@@ -208,6 +208,9 @@
       let framesManager = new FramesManager();
       let annotatedObjectsTracker = new AnnotatedObjectsTracker(framesManager);
 
+      let exportData = {};
+      
+
       let slider = {
         init: function(min, max, onChange) {
           $(sliderElement).slider('option', 'min', min);
@@ -405,7 +408,7 @@
         let totalFrames = framesManager.frames.totalFrames();
         for (let i = 0; i < totalFrames; i++) {
           framesManager.frames.getFrame(i).then((blob) => {
-            zip.file(i + '.jpg', blob);
+            zip.file(exportData.videoName + '_' + i + '.jpg', blob);
 
             processed++;
             if (processed == totalFrames) {
@@ -431,6 +434,7 @@
         if (this.files.length != 1) {
           return;
         }
+        exportData.videoName = videoFile.value.split(/(\\|\/)/g).pop().split('.')[0];
 
         videoFile.disabled = true;
         zipFile.disabled = true;
@@ -457,6 +461,11 @@
                 ctx.drawImage(img, 0, 0);
 
                 videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
+                exportData.size = {
+                  depth: 3,
+                  width: img.width,
+                  height: img.height
+                };
                 extractionProgressElement.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
               });
             });
@@ -680,62 +689,159 @@
         $('#objects').append(div);
       }
 
+      // function generateXml() {
+      //   let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+      //   xml += '<annotation>\n';
+      //   xml += '  <folder>not available</folder>\n';
+      //   xml += '  <filename>not available</filename>\n';
+      //   xml += '  <source>\n';
+      //   xml += '    <type>video</type>\n';
+      //   xml += '    <sourceImage>vatic frames</sourceImage>\n';
+      //   xml += '    <sourceAnnotation>vatic</sourceAnnotation>\n';
+      //   xml += '  </source>\n';
+
+      //   let totalFrames = framesManager.frames.totalFrames();
+      //   for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
+      //     let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+
+      //     xml += '  <object>\n';
+      //     xml += '    <name>' + annotatedObject.name + '</name>\n';
+      //     xml += '    <moving>true</moving>\n';
+      //     xml += '    <action/>\n';
+      //     xml += '    <verified>0</verified>\n';
+      //     xml += '    <id>' + annotatedObject.id + '</id>\n';
+      //     xml += '    <createdFrame>0</createdFrame>\n';
+      //     xml += '    <startFrame>0</startFrame>\n';
+      //     xml += '    <endFrame>' + (totalFrames - 1 ) + '</endFrame>\n';
+
+      //     for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
+      //       let annotatedFrame = annotatedObject.get(frameNumber);
+      //       if (annotatedFrame == null) {
+      //         window.alert('Play the video in full before downloading the XML so that bounding box data is available for all frames.');
+      //         return;
+      //       }
+
+      //       let bbox = annotatedFrame.bbox;
+      //       if (bbox != null) {
+      //         let isGroundThrugh = annotatedFrame.isGroundTruth ? 1 : 0;
+
+      //         xml += '    ';
+      //         xml += '<polygon>';
+      //         xml += '<t>' + frameNumber + '</t>';
+      //         xml += '<pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+      //         xml += '<pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+      //         xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+      //         xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+      //         xml += '</polygon>\n';
+      //       }
+      //     }
+
+      //     xml += '  </object>\n';
+      //   }
+
+      //   xml += '</annotation>\n';
+
+      //   let writeStream = streamSaver.createWriteStream('output.xml').getWriter();
+      //   let encoder = new TextEncoder();
+      //   writeStream.write(encoder.encode(xml));
+      //   writeStream.close();
+      // }
+
+      // 1 iterate through each frame
+      // 2 iterate through each object to see if that object has a annotatedFrame
+      //   & annotatedFrame.bbox
+      //   2.1 if it does then write object w/ bndbox to annotation file
+
       function generateXml() {
-        let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
-        xml += '<annotation>\n';
-        xml += '  <folder>not available</folder>\n';
-        xml += '  <filename>not available</filename>\n';
-        xml += '  <source>\n';
-        xml += '    <type>video</type>\n';
-        xml += '    <sourceImage>vatic frames</sourceImage>\n';
-        xml += '    <sourceAnnotation>vatic</sourceAnnotation>\n';
-        xml += '  </source>\n';
-
         let totalFrames = framesManager.frames.totalFrames();
-        for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
-          let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+        let xmlZip = new JSZip();
+        // 1 iterate through frames
+        for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
 
-          xml += '  <object>\n';
-          xml += '    <name>' + annotatedObject.name + '</name>\n';
-          xml += '    <moving>true</moving>\n';
-          xml += '    <action/>\n';
-          xml += '    <verified>0</verified>\n';
-          xml += '    <id>' + annotatedObject.id + '</id>\n';
-          xml += '    <createdFrame>0</createdFrame>\n';
-          xml += '    <startFrame>0</startFrame>\n';
-          xml += '    <endFrame>' + (totalFrames - 1 ) + '</endFrame>\n';
+          // header info per frame
+          // let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+          let xml = '<annotation>\n';
+          xml += '  <folder></folder>\n';
+          xml += '  <filename></filename>\n';
+          xml += '  <source></source>\n';
+          xml += '  <size>\n';
+          xml += '    <width>' + exportData.size.width + '</width>\n';
+          xml += '    <height>' + exportData.size.height + '</height>\n';
+          xml += '    <depth>' + exportData.size.depth + '</depth>\n';
+          xml += '  </size>\n';
+          xml += '  <segmented>0</segmented>\n';
 
-          for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
+          // 2 iterate through each object
+          for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
+            let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+            // 3 get this frame from that object
             let annotatedFrame = annotatedObject.get(frameNumber);
+
             if (annotatedFrame == null) {
               window.alert('Play the video in full before downloading the XML so that bounding box data is available for all frames.');
               return;
             }
-
+            // 4 get objects bounding box
             let bbox = annotatedFrame.bbox;
             if (bbox != null) {
               let isGroundThrugh = annotatedFrame.isGroundTruth ? 1 : 0;
 
-              xml += '    ';
-              xml += '<polygon>';
-              xml += '<t>' + frameNumber + '</t>';
-              xml += '<pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
-              xml += '<pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
-              xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
-              xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
-              xml += '</polygon>\n';
+
+              // actual 
+              xml += '  <object>\n';
+              xml += '    <name>' + annotatedObject.name + '</name>\n';
+              xml += '    <pose></pose>\n';
+              xml += '    <truncated>0</truncated>\n';
+              xml += '    <difficult>0</difficult>\n';
+              xml += '    <occluded>0</occluded>\n';
+              xml += '    <bndbox>';
+              // xml += '    <t>' + frameNumber + '</t>';
+              xml += '      <xmin>' + bbox.x + '</xmin>\n';
+              xml += '      <xmax>' + (bbox.x + bbox.width) + '</xmax>\n';
+              xml += '      <ymin>' + bbox.y + '</ymin>\n';
+              xml += '      <ymax>' + (bbox.y + bbox.height) + '</ymax>\n';
+              // xml += '      <pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>'; // bottom-left
+              // xml += '    <pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';//
+              // xml += '      <pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>'; //top-right
+              // xml += '    <pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+              xml += '    </bndbox>\n';
+              xml += '  </object>\n';
             }
           }
+          xml += '</annotation>\n';
+          xmlZip.file(`${exportData.videoName}_${frameNumber}.xml`, xml);
+          // logic to write xml file here
+          // function downloadFrames() {
+          //   let zip = new JSZip();
 
-          xml += '  </object>\n';
+          //   let processed = 0;
+          //   let totalFrames = framesManager.frames.totalFrames();
+          //   for (let i = 0; i < totalFrames; i++) {
+          //     framesManager.frames.getFrame(i).then((blob) => {
+          //       zip.file(i + '.jpg', blob);
+
+          //       processed++;
+          //       if (processed == totalFrames) {
+          //         let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
+          //         zip.generateInternalStream({ type: 'uint8array', streamFiles: true })
+          //           .on('data', data => writeStream.write(data))
+          //           .on('end', () => writeStream.close())
+          //           .resume();
+          //       }
+          //     });
+          //   }
+          // }
         }
 
-        xml += '</annotation>\n';
-
-        let writeStream = streamSaver.createWriteStream('output.xml').getWriter();
-        let encoder = new TextEncoder();
-        writeStream.write(encoder.encode(xml));
-        writeStream.close();
+        let xmlWriteStream = streamSaver.createWriteStream('pascal_voc_xml_files.zip').getWriter();
+        xmlZip.generateInternalStream({ type: 'uint8array', streamFiles: true })
+          .on('data', data => xmlWriteStream.write(data))
+          .on('end', () => xmlWriteStream.close())
+          .resume();
+        // let writeStream = streamSaver.createWriteStream('output.xml').getWriter();
+        // let encoder = new TextEncoder();
+        // writeStream.write(encoder.encode(xml));
+        // writeStream.close();
       }
 
       function importXml() {
